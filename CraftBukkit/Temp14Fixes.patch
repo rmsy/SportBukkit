@@ -1,0 +1,487 @@
+From 44f401c20d96eae64c7cf2270bf5a382367e8c3b Mon Sep 17 00:00:00 2001
+From: mrapple <tony@oc.tc>
+Date: Thu, 25 Oct 2012 18:45:08 -0500
+Subject: [PATCH] 1.4compat
+
+---
+ .../java/net/minecraft/server/EntityLiving.java    |    4 +-
+ src/main/java/net/minecraft/server/ItemStack.java  |    6 ++-
+ .../java/net/minecraft/server/MinecraftServer.java |    4 +-
+ .../java/net/minecraft/server/NetLoginHandler.java |   26 ++++++-
+ .../server/Packet204LocaleAndViewDistance.java     |   72 ++++++++++++++++++++
+ .../net/minecraft/server/Packet21PickupSpawn.java  |   69 +++++++++++++++++++
+ .../net/minecraft/server/Packet254GetInfo.java     |   28 ++++++++
+ .../net/minecraft/server/Packet4UpdateTime.java    |   48 +++++++++++++
+ .../net/minecraft/server/Packet61WorldEvent.java   |   50 ++++++++++++++
+ .../server/ServerConfigurationManagerAbstract.java |    4 +-
+ .../java/org/bukkit/craftbukkit/CraftSound.java    |    2 +-
+ .../java/org/bukkit/craftbukkit/CraftWorld.java    |    2 +-
+ 12 files changed, 303 insertions(+), 12 deletions(-)
+ create mode 100644 src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
+ create mode 100644 src/main/java/net/minecraft/server/Packet21PickupSpawn.java
+ create mode 100644 src/main/java/net/minecraft/server/Packet254GetInfo.java
+ create mode 100644 src/main/java/net/minecraft/server/Packet4UpdateTime.java
+ create mode 100644 src/main/java/net/minecraft/server/Packet61WorldEvent.java
+
+diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
+index 826ab5e..361e82f 100644
+--- a/src/main/java/net/minecraft/server/EntityLiving.java
++++ b/src/main/java/net/minecraft/server/EntityLiving.java
+@@ -721,11 +721,11 @@ public abstract class EntityLiving extends Entity {
+     }
+ 
+     protected String aR() {
+-        return "damage.hurtflesh";
++        return "damage.hit";
+     }
+ 
+     protected String aS() {
+-        return "damage.hurtflesh";
++        return "damage.hit";
+     }
+ 
+     public void a(Entity entity, int i, double d0, double d1) {
+diff --git a/src/main/java/net/minecraft/server/ItemStack.java b/src/main/java/net/minecraft/server/ItemStack.java
+index efe82d3..171d369 100644
+--- a/src/main/java/net/minecraft/server/ItemStack.java
++++ b/src/main/java/net/minecraft/server/ItemStack.java
+@@ -34,7 +34,11 @@ public final class ItemStack {
+ 
+     public ItemStack(int i, int j, int k) {
+         this.count = 0;
+-        this.id = i;
++        if(i < 128 || (i > 145 && i < 389)) {
++            this.id = i;
++        } else {
++            this.id = 0;
++        }
+         this.count = j;
+         this.setData(k); // CraftBukkit
+     }
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 9b00bb7..b4fa923 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -518,7 +518,7 @@ public abstract class MinecraftServer implements Runnable, IMojangStatistics, IC
+         if (this.ticks % 20 == 0) {
+             for (int i = 0; i < this.getServerConfigurationManager().players.size(); ++i) {
+                 EntityPlayer entityplayer = (EntityPlayer) this.getServerConfigurationManager().players.get(i);
+-                entityplayer.netServerHandler.sendPacket(new Packet4UpdateTime(entityplayer.getPlayerTime())); // Add support for per player time
++                entityplayer.netServerHandler.sendPacket(new Packet4UpdateTime(entityplayer.getPlayerTime(), entityplayer.getPlayerTime())); // Add support for per player time
+             }
+         }
+ 
+@@ -724,7 +724,7 @@ public abstract class MinecraftServer implements Runnable, IMojangStatistics, IC
+     }
+ 
+     public String getVersion() {
+-        return "1.3.2";
++        return "1.4.2";
+     }
+ 
+     public int x() {
+diff --git a/src/main/java/net/minecraft/server/NetLoginHandler.java b/src/main/java/net/minecraft/server/NetLoginHandler.java
+index 2d8d25f..e37693d 100644
+--- a/src/main/java/net/minecraft/server/NetLoginHandler.java
++++ b/src/main/java/net/minecraft/server/NetLoginHandler.java
+@@ -6,7 +6,10 @@ import java.security.PrivateKey;
+ import java.security.PublicKey;
+ import java.util.Arrays;
+ import java.util.Random;
++import java.util.List;
++import java.util.Iterator;
+ import java.util.logging.Logger;
++import java.io.Serializable;
+ import javax.crypto.SecretKey;
+ 
+ public class NetLoginHandler extends NetHandler {
+@@ -70,8 +73,8 @@ public class NetLoginHandler extends NetHandler {
+         } else {
+             PublicKey publickey = this.server.E().getPublic();
+ 
+-            if (packet2handshake.d() != 39) {
+-                if (packet2handshake.d() > 39) {
++            if (packet2handshake.d() != 47) {
++                if (packet2handshake.d() > 47) {
+                     this.disconnect("Outdated server!");
+                 } else {
+                     this.disconnect("Outdated client!");
+@@ -143,7 +146,24 @@ public class NetLoginHandler extends NetHandler {
+         try {
+             // CraftBukkit start
+             org.bukkit.event.server.ServerListPingEvent pingEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callServerListPingEvent(this.server.server, getSocket().getInetAddress(), this.server.getMotd(), this.server.getServerConfigurationManager().getPlayerCount(), this.server.getServerConfigurationManager().getMaxPlayers());
+-            String s = pingEvent.getMotd() + "\u00A7" + this.server.getServerConfigurationManager().getPlayerCount() + "\u00A7" + pingEvent.getMaxPlayers();
++
++            String s = null;
++            if(packet254getinfo.a == 1) {
++                List var4 = Arrays.asList(new Serializable[] {1, 47, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers()});
++                Object var6;
++
++                for (Iterator it = var4.iterator(); it.hasNext(); s = s + var6.toString().replaceAll("\u0000", "")) {
++                    var6 = it.next();
++
++                    if (s == null) {
++                        s = "\u00a7";
++                    } else {
++                        s = s + "\u0000";
++                    }
++                }
++            } else {
++                s = pingEvent.getMotd() + "\u00A7" + this.server.getServerConfigurationManager().getPlayerCount() + "\u00A7" + pingEvent.getMaxPlayers();
++            }
+             // CraftBukkit end
+ 
+             InetAddress inetaddress = null;
+diff --git a/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java b/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
+new file mode 100644
+index 0000000..e0fcf1b
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
+@@ -0,0 +1,72 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet204LocaleAndViewDistance extends Packet {
++
++    private String a;
++    private int b;
++    private int c;
++    private boolean d;
++    private int e;
++    private boolean f;
++
++    public Packet204LocaleAndViewDistance() {}
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = a(datainputstream, 7);
++        this.b = datainputstream.readByte();
++        byte b0 = datainputstream.readByte();
++
++        this.c = b0 & 7;
++        this.d = (b0 & 8) == 8;
++        this.e = datainputstream.readByte();
++        this.f = datainputstream.readBoolean();
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        a(this.a, dataoutputstream);
++        dataoutputstream.writeByte(this.b);
++        dataoutputstream.writeByte(this.c | (this.d ? 1 : 0) << 3);
++        dataoutputstream.writeByte(this.e);
++        dataoutputstream.writeBoolean(this.f);
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 0;
++    }
++
++    public String d() {
++        return this.a;
++    }
++
++    public int f() {
++        return this.b;
++    }
++
++    public int g() {
++        return this.c;
++    }
++
++    public boolean h() {
++        return this.d;
++    }
++
++    public int i() {
++        return this.e;
++    }
++
++    public boolean e() {
++        return true;
++    }
++
++    public boolean a(Packet packet) {
++        return true;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/Packet21PickupSpawn.java b/src/main/java/net/minecraft/server/Packet21PickupSpawn.java
+new file mode 100644
+index 0000000..5867eac
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet21PickupSpawn.java
+@@ -0,0 +1,69 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet21PickupSpawn extends Packet {
++
++    public int a;
++    public int b;
++    public int c;
++    public int d;
++    public byte e;
++    public byte f;
++    public byte g;
++    public int h;
++    public int i;
++    public int j;
++
++    public Packet21PickupSpawn() {}
++
++    public Packet21PickupSpawn(EntityItem entityitem) {
++        this.a = entityitem.id;
++        this.h = entityitem.itemStack.id;
++        this.i = entityitem.itemStack.count;
++        this.j = entityitem.itemStack.getData();
++        this.b = MathHelper.floor(entityitem.locX * 32.0D);
++        this.c = MathHelper.floor(entityitem.locY * 32.0D);
++        this.d = MathHelper.floor(entityitem.locZ * 32.0D);
++        this.e = (byte) ((int) (entityitem.motX * 128.0D));
++        this.f = (byte) ((int) (entityitem.motY * 128.0D));
++        this.g = (byte) ((int) (entityitem.motZ * 128.0D));
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = datainputstream.readInt();
++        this.h = datainputstream.readShort();
++        this.i = datainputstream.readByte();
++        this.j = datainputstream.readShort();
++        this.b = datainputstream.readInt();
++        this.c = datainputstream.readInt();
++        this.d = datainputstream.readInt();
++        this.e = datainputstream.readByte();
++        this.f = datainputstream.readByte();
++        this.g = datainputstream.readByte();
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        dataoutputstream.writeInt(this.a);
++        dataoutputstream.writeShort(this.h);
++        dataoutputstream.writeByte(this.i);
++        dataoutputstream.writeShort(this.j);
++        dataoutputstream.writeShort(-1);
++        dataoutputstream.writeInt(this.b);
++        dataoutputstream.writeInt(this.c);
++        dataoutputstream.writeInt(this.d);
++        dataoutputstream.writeByte(this.e);
++        dataoutputstream.writeByte(this.f);
++        dataoutputstream.writeByte(this.g);
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 24;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/Packet254GetInfo.java b/src/main/java/net/minecraft/server/Packet254GetInfo.java
+new file mode 100644
+index 0000000..153ff1f
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet254GetInfo.java
+@@ -0,0 +1,28 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++
++public class Packet254GetInfo extends Packet {
++    public int a = 0;
++
++    public Packet254GetInfo() {}
++
++    public void a(DataInputStream datainputstream) {
++        try {
++            this.a = datainputstream.readByte();
++        } catch (Throwable t) {
++            this.a = 0;
++        }
++    }
++
++    public void a(DataOutputStream dataoutputstream) {}
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 0;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/Packet4UpdateTime.java b/src/main/java/net/minecraft/server/Packet4UpdateTime.java
+new file mode 100644
+index 0000000..415d41b
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet4UpdateTime.java
+@@ -0,0 +1,48 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet4UpdateTime extends Packet {
++
++    public long a;
++    public long b;
++
++    public Packet4UpdateTime() {}
++
++    public Packet4UpdateTime(long a, long b) {
++        this.a = a;
++        this.b = b;
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = datainputstream.readLong();
++        this.b = datainputstream.readLong();
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        dataoutputstream.writeLong(this.a);
++        dataoutputstream.writeLong(this.b);
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 16;
++    }
++
++    public boolean e() {
++        return true;
++    }
++
++    public boolean a(Packet packet) {
++        return true;
++    }
++
++    public boolean a_() {
++        return true;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/Packet61WorldEvent.java b/src/main/java/net/minecraft/server/Packet61WorldEvent.java
+new file mode 100644
+index 0000000..a58d3ce
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet61WorldEvent.java
+@@ -0,0 +1,50 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet61WorldEvent extends Packet {
++
++    public int a;
++    public int b;
++    public int c;
++    public int d;
++    public int e;
++
++    public Packet61WorldEvent() {}
++
++    public Packet61WorldEvent(int i, int j, int k, int l, int i1) {
++        this.a = i;
++        this.c = j;
++        this.d = k;
++        this.e = l;
++        this.b = i1;
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = datainputstream.readInt();
++        this.c = datainputstream.readInt();
++        this.d = datainputstream.readByte() & 255;
++        this.e = datainputstream.readInt();
++        this.b = datainputstream.readInt();
++        datainputstream.readBoolean();
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        dataoutputstream.writeInt(this.a);
++        dataoutputstream.writeInt(this.c);
++        dataoutputstream.writeByte(this.d & 255);
++        dataoutputstream.writeInt(this.e);
++        dataoutputstream.writeInt(this.b);
++        dataoutputstream.writeBoolean(false);
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 20;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/ServerConfigurationManagerAbstract.java b/src/main/java/net/minecraft/server/ServerConfigurationManagerAbstract.java
+index c3aa44a..b0a41c3 100644
+--- a/src/main/java/net/minecraft/server/ServerConfigurationManagerAbstract.java
++++ b/src/main/java/net/minecraft/server/ServerConfigurationManagerAbstract.java
+@@ -92,7 +92,7 @@ public abstract class ServerConfigurationManagerAbstract {
+         this.c(entityplayer);
+         netserverhandler.a(entityplayer.locX, entityplayer.locY, entityplayer.locZ, entityplayer.yaw, entityplayer.pitch);
+         this.server.ac().a(netserverhandler);
+-        netserverhandler.sendPacket(new Packet4UpdateTime(worldserver.getTime()));
++        netserverhandler.sendPacket(new Packet4UpdateTime(worldserver.getTime(), worldserver.getTime()));
+         if (this.server.getTexturePack().length() > 0) {
+             entityplayer.a(this.server.getTexturePack(), this.server.R());
+         }
+@@ -663,7 +663,7 @@ public abstract class ServerConfigurationManagerAbstract {
+     public void reloadWhitelist() {}
+ 
+     public void b(EntityPlayer entityplayer, WorldServer worldserver) {
+-        entityplayer.netServerHandler.sendPacket(new Packet4UpdateTime(worldserver.getTime()));
++        entityplayer.netServerHandler.sendPacket(new Packet4UpdateTime(worldserver.getTime(), worldserver.getTime()));
+         if (worldserver.J()) {
+             entityplayer.netServerHandler.sendPacket(new Packet70Bed(1, 0));
+         }
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftSound.java b/src/main/java/org/bukkit/craftbukkit/CraftSound.java
+index 0bdb493..26193f2 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftSound.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftSound.java
+@@ -31,7 +31,7 @@ public class CraftSound {
+         sounds[FIRE_IGNITE.ordinal()] = "fire.ignite";
+         sounds[FIZZ.ordinal()] = "random.fizz";
+         sounds[FUSE.ordinal()] = "random.fuse";
+-        sounds[HURT.ordinal()] = "random.hurt";
++        sounds[HURT.ordinal()] = "damage.hit";
+         sounds[HURT_FLESH.ordinal()] = "damage.hurtflesh";
+         sounds[ITEM_BREAK.ordinal()] = "random.break";
+         sounds[ITEM_PICKUP.ordinal()] = "random.pop";
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+index a8c8a60..acd3d5e 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+@@ -429,7 +429,7 @@ public class CraftWorld implements World {
+             CraftPlayer cp = (CraftPlayer) p;
+             if (cp.getHandle().netServerHandler == null) continue;
+ 
+-            cp.getHandle().netServerHandler.sendPacket(new Packet4UpdateTime(cp.getHandle().getPlayerTime()));
++            cp.getHandle().netServerHandler.sendPacket(new Packet4UpdateTime(cp.getHandle().getPlayerTime(), cp.getHandle().getPlayerTime()));
+         }
+     }
+ 
+-- 
+1.7.4.4
+
