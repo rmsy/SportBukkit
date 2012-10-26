@@ -1,4 +1,4 @@
-From bccff16e0547cec9218a0959c8520c71b8cc741b Mon Sep 17 00:00:00 2001
+From 34ef73cb4ac5c5b7662f451d9702f867fe909a1b Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
 Date: Thu, 25 Oct 2012 18:45:08 -0500
 Subject: [PATCH] 1.4compat
@@ -8,6 +8,8 @@ Subject: [PATCH] 1.4compat
  src/main/java/net/minecraft/server/ItemStack.java  |    6 ++-
  .../java/net/minecraft/server/MinecraftServer.java |    4 +-
  .../java/net/minecraft/server/NetLoginHandler.java |   26 ++++++-
+ .../java/net/minecraft/server/NetworkManager.java  |    2 +-
+ src/main/java/net/minecraft/server/Packet.java     |   10 +++-
  .../server/Packet204LocaleAndViewDistance.java     |   72 ++++++++++++++++++++
  .../net/minecraft/server/Packet21PickupSpawn.java  |   69 +++++++++++++++++++
  .../net/minecraft/server/Packet254GetInfo.java     |   28 ++++++++
@@ -16,7 +18,7 @@ Subject: [PATCH] 1.4compat
  .../server/ServerConfigurationManagerAbstract.java |    4 +-
  .../java/org/bukkit/craftbukkit/CraftSound.java    |    2 +-
  .../java/org/bukkit/craftbukkit/CraftWorld.java    |    2 +-
- 12 files changed, 303 insertions(+), 12 deletions(-)
+ 14 files changed, 313 insertions(+), 14 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
  create mode 100644 src/main/java/net/minecraft/server/Packet21PickupSpawn.java
  create mode 100644 src/main/java/net/minecraft/server/Packet254GetInfo.java
@@ -132,6 +134,63 @@ index 2d8d25f..e37693d 100644
              // CraftBukkit end
  
              InetAddress inetaddress = null;
+diff --git a/src/main/java/net/minecraft/server/NetworkManager.java b/src/main/java/net/minecraft/server/NetworkManager.java
+index a3f2841..090060a 100644
+--- a/src/main/java/net/minecraft/server/NetworkManager.java
++++ b/src/main/java/net/minecraft/server/NetworkManager.java
+@@ -190,7 +190,7 @@ public class NetworkManager implements INetworkManager {
+         boolean flag = false;
+ 
+         try {
+-            Packet packet = Packet.a(this.input, this.packetListener.a());
++            Packet packet = Packet.a(this.input, this.packetListener.a(), this.socket);
+ 
+             if (packet != null) {
+                 if (packet instanceof Packet252KeyResponse && !this.f) {
+diff --git a/src/main/java/net/minecraft/server/Packet.java b/src/main/java/net/minecraft/server/Packet.java
+index 380c0b9..a4e936a 100644
+--- a/src/main/java/net/minecraft/server/Packet.java
++++ b/src/main/java/net/minecraft/server/Packet.java
+@@ -4,6 +4,7 @@ import java.io.DataInputStream;
+ import java.io.DataOutputStream;
+ import java.io.EOFException;
+ import java.io.IOException;
++import java.net.Socket;
+ import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.Map;
+@@ -81,9 +82,10 @@ public abstract class Packet {
+         return packetID; // ((Integer) a.get(this.getClass())).intValue(); // CraftBukkit
+     }
+ 
+-    public static Packet a(DataInputStream datainputstream, boolean flag) throws IOException { // CraftBukkit - throws IOException
++    public static Packet a(DataInputStream datainputstream, boolean flag, Socket socket) throws IOException { // CraftBukkit - throws IOException
+         boolean flag1 = false;
+         Packet packet = null;
++        int timeout = socket.getSoTimeout();
+ 
+         int i;
+ 
+@@ -102,6 +104,11 @@ public abstract class Packet {
+                 throw new IOException("Bad packet id " + i);
+             }
+ 
++            if (packet instanceof Packet254GetInfo)
++            {
++                socket.setSoTimeout(100);
++            }
++
+             packet.a(datainputstream);
+             ++n;
+             o += (long) packet.a();
+@@ -124,6 +131,7 @@ public abstract class Packet {
+         PacketCounter.a(i, (long) packet.a());
+         ++n;
+         o += (long) packet.a();
++        socket.setSoTimeout(timeout);
+         return packet;
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java b/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
 new file mode 100644
 index 0000000..e0fcf1b
