@@ -1,24 +1,24 @@
-From 0e0c75d106c7fc4082ebd0f1d5c25cb14a12ed27 Mon Sep 17 00:00:00 2001
+From d760a6d7c2c911da56b9c733da43b48ae0cd33bf Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
 Date: Thu, 25 Oct 2012 18:45:08 -0500
 Subject: [PATCH] 1.4compat
 
 ---
  .../java/net/minecraft/server/EntityLiving.java    |    4 +-
- src/main/java/net/minecraft/server/ItemStack.java  |    6 ++-
+ src/main/java/net/minecraft/server/ItemStack.java  |    6 +-
  .../java/net/minecraft/server/MinecraftServer.java |    4 +-
- .../java/net/minecraft/server/NetLoginHandler.java |   26 ++++++-
- .../java/net/minecraft/server/NetworkManager.java  |    2 +-
- src/main/java/net/minecraft/server/Packet.java     |   10 +++-
- .../server/Packet204LocaleAndViewDistance.java     |   72 ++++++++++++++++++++
- .../net/minecraft/server/Packet21PickupSpawn.java  |   69 +++++++++++++++++++
- .../net/minecraft/server/Packet254GetInfo.java     |   28 ++++++++
- .../net/minecraft/server/Packet4UpdateTime.java    |   48 +++++++++++++
- .../net/minecraft/server/Packet61WorldEvent.java   |   50 ++++++++++++++
+ .../java/net/minecraft/server/NetLoginHandler.java |   29 +++++++-
+ .../java/net/minecraft/server/NetworkManager.java  |    4 +-
+ src/main/java/net/minecraft/server/Packet.java     |   12 +++-
+ .../server/Packet204LocaleAndViewDistance.java     |   78 ++++++++++++++++++++
+ .../net/minecraft/server/Packet21PickupSpawn.java  |   71 ++++++++++++++++++
+ .../net/minecraft/server/Packet254GetInfo.java     |   28 +++++++
+ .../net/minecraft/server/Packet4UpdateTime.java    |   52 +++++++++++++
+ .../net/minecraft/server/Packet61WorldEvent.java   |   50 +++++++++++++
  .../server/ServerConfigurationManagerAbstract.java |    4 +-
  .../java/org/bukkit/craftbukkit/CraftSound.java    |    2 +-
  .../java/org/bukkit/craftbukkit/CraftWorld.java    |    2 +-
- 14 files changed, 313 insertions(+), 14 deletions(-)
+ 14 files changed, 332 insertions(+), 14 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
  create mode 100644 src/main/java/net/minecraft/server/Packet21PickupSpawn.java
  create mode 100644 src/main/java/net/minecraft/server/Packet254GetInfo.java
@@ -83,10 +83,10 @@ index 9b00bb7..b4fa923 100644
  
      public int x() {
 diff --git a/src/main/java/net/minecraft/server/NetLoginHandler.java b/src/main/java/net/minecraft/server/NetLoginHandler.java
-index 2d8d25f..a578364 100644
+index 2d8d25f..1d341fd 100644
 --- a/src/main/java/net/minecraft/server/NetLoginHandler.java
 +++ b/src/main/java/net/minecraft/server/NetLoginHandler.java
-@@ -6,7 +6,10 @@ import java.security.PrivateKey;
+@@ -6,9 +6,14 @@ import java.security.PrivateKey;
  import java.security.PublicKey;
  import java.util.Arrays;
  import java.util.Random;
@@ -96,19 +96,24 @@ index 2d8d25f..a578364 100644
 +import java.io.Serializable;
  import javax.crypto.SecretKey;
  
++import org.bukkit.ChatColor;
++
  public class NetLoginHandler extends NetHandler {
-@@ -70,8 +73,8 @@ public class NetLoginHandler extends NetHandler {
+ 
+     private byte[] d;
+@@ -70,8 +75,9 @@ public class NetLoginHandler extends NetHandler {
          } else {
              PublicKey publickey = this.server.E().getPublic();
  
 -            if (packet2handshake.d() != 39) {
 -                if (packet2handshake.d() > 39) {
-+            if (packet2handshake.d() != 47) {
++            networkManager.protocolVersion = packet2handshake.d();
++            if (packet2handshake.d() != 39 && packet2handshake.d() != 47) {
 +                if (packet2handshake.d() > 47) {
                      this.disconnect("Outdated server!");
                  } else {
                      this.disconnect("Outdated client!");
-@@ -143,7 +146,24 @@ public class NetLoginHandler extends NetHandler {
+@@ -143,7 +149,24 @@ public class NetLoginHandler extends NetHandler {
          try {
              // CraftBukkit start
              org.bukkit.event.server.ServerListPingEvent pingEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callServerListPingEvent(this.server.server, getSocket().getInetAddress(), this.server.getMotd(), this.server.getServerConfigurationManager().getPlayerCount(), this.server.getServerConfigurationManager().getMaxPlayers());
@@ -129,26 +134,42 @@ index 2d8d25f..a578364 100644
 +                    }
 +                }
 +            } else {
-+                s = "Server on 1.4 - upgrade now!" + "\u00A7" + this.server.getServerConfigurationManager().getPlayerCount() + "\u00A7" + pingEvent.getMaxPlayers();
++                s = ChatColor.stripColor(pingEvent.getMotd()) + "\u00A7" + this.server.getServerConfigurationManager().getPlayerCount() + "\u00A7" + pingEvent.getMaxPlayers();
 +            }
              // CraftBukkit end
  
              InetAddress inetaddress = null;
 diff --git a/src/main/java/net/minecraft/server/NetworkManager.java b/src/main/java/net/minecraft/server/NetworkManager.java
-index a3f2841..090060a 100644
+index a3f2841..2b03964 100644
 --- a/src/main/java/net/minecraft/server/NetworkManager.java
 +++ b/src/main/java/net/minecraft/server/NetworkManager.java
-@@ -190,7 +190,7 @@ public class NetworkManager implements INetworkManager {
+@@ -46,6 +46,7 @@ public class NetworkManager implements INetworkManager {
+     private SecretKey z = null;
+     private PrivateKey A = null;
+     private int lowPriorityQueueDelay = 50;
++    public int protocolVersion = -1;
+ 
+     public NetworkManager(Socket socket, String s, NetHandler nethandler, PrivateKey privatekey) throws IOException { // CraftBukkit - throws IOException
+         this.A = privatekey;
+@@ -98,6 +99,7 @@ public class NetworkManager implements INetworkManager {
+             if (this.e == 0 || System.currentTimeMillis() - ((Packet) this.highPriorityQueue.get(0)).timestamp >= (long) this.e) {
+                 packet = this.a(false);
+                 if (packet != null) {
++                    packet.protocolVersion = this.protocolVersion;
+                     Packet.a(packet, this.output);
+                     if (packet instanceof Packet252KeyResponse && !this.g) {
+                         if (!this.packetListener.a()) {
+@@ -190,7 +192,7 @@ public class NetworkManager implements INetworkManager {
          boolean flag = false;
  
          try {
 -            Packet packet = Packet.a(this.input, this.packetListener.a());
-+            Packet packet = Packet.a(this.input, this.packetListener.a(), this.socket);
++            Packet packet = Packet.a(this.input, this.packetListener.a(), this.socket, this.protocolVersion);
  
              if (packet != null) {
                  if (packet instanceof Packet252KeyResponse && !this.f) {
 diff --git a/src/main/java/net/minecraft/server/Packet.java b/src/main/java/net/minecraft/server/Packet.java
-index 380c0b9..a4e936a 100644
+index 380c0b9..bdf8900 100644
 --- a/src/main/java/net/minecraft/server/Packet.java
 +++ b/src/main/java/net/minecraft/server/Packet.java
 @@ -4,6 +4,7 @@ import java.io.DataInputStream;
@@ -159,19 +180,27 @@ index 380c0b9..a4e936a 100644
  import java.util.HashMap;
  import java.util.HashSet;
  import java.util.Map;
-@@ -81,9 +82,10 @@ public abstract class Packet {
+@@ -23,6 +24,7 @@ public abstract class Packet {
+     public boolean lowPriority = false;
+     // CraftBukkit start - calculate packet ID once - used a bunch of times
+     private int packetID;
++    protected int protocolVersion;
+ 
+     public Packet() {
+         packetID = ((Integer) a.get(this.getClass())).intValue();
+@@ -81,9 +83,10 @@ public abstract class Packet {
          return packetID; // ((Integer) a.get(this.getClass())).intValue(); // CraftBukkit
      }
  
 -    public static Packet a(DataInputStream datainputstream, boolean flag) throws IOException { // CraftBukkit - throws IOException
-+    public static Packet a(DataInputStream datainputstream, boolean flag, Socket socket) throws IOException { // CraftBukkit - throws IOException
++    public static Packet a(DataInputStream datainputstream, boolean flag, Socket socket, int protocol) throws IOException { // CraftBukkit - throws IOException
          boolean flag1 = false;
          Packet packet = null;
 +        int timeout = socket.getSoTimeout();
  
          int i;
  
-@@ -102,6 +104,11 @@ public abstract class Packet {
+@@ -102,6 +105,12 @@ public abstract class Packet {
                  throw new IOException("Bad packet id " + i);
              }
  
@@ -180,10 +209,11 @@ index 380c0b9..a4e936a 100644
 +                socket.setSoTimeout(100);
 +            }
 +
++            packet.protocolVersion = protocol;
              packet.a(datainputstream);
              ++n;
              o += (long) packet.a();
-@@ -124,6 +131,7 @@ public abstract class Packet {
+@@ -124,6 +133,7 @@ public abstract class Packet {
          PacketCounter.a(i, (long) packet.a());
          ++n;
          o += (long) packet.a();
@@ -193,10 +223,10 @@ index 380c0b9..a4e936a 100644
  
 diff --git a/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java b/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
 new file mode 100644
-index 0000000..e0fcf1b
+index 0000000..eaa5f6c
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,78 @@
 +package net.minecraft.server;
 +
 +import java.io.DataInputStream;
@@ -222,7 +252,10 @@ index 0000000..e0fcf1b
 +        this.c = b0 & 7;
 +        this.d = (b0 & 8) == 8;
 +        this.e = datainputstream.readByte();
-+        this.f = datainputstream.readBoolean();
++
++        if(protocolVersion == 47) {
++            this.f = datainputstream.readBoolean();
++        }
 +    }
 +
 +    public void a(DataOutputStream dataoutputstream) throws IOException {
@@ -230,7 +263,10 @@ index 0000000..e0fcf1b
 +        dataoutputstream.writeByte(this.b);
 +        dataoutputstream.writeByte(this.c | (this.d ? 1 : 0) << 3);
 +        dataoutputstream.writeByte(this.e);
-+        dataoutputstream.writeBoolean(this.f);
++
++        if(protocolVersion == 47) {
++            dataoutputstream.writeBoolean(this.f);
++        }
 +    }
 +
 +    public void handle(NetHandler nethandler) {
@@ -272,10 +308,10 @@ index 0000000..e0fcf1b
 \ No newline at end of file
 diff --git a/src/main/java/net/minecraft/server/Packet21PickupSpawn.java b/src/main/java/net/minecraft/server/Packet21PickupSpawn.java
 new file mode 100644
-index 0000000..5867eac
+index 0000000..b2280ce
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/Packet21PickupSpawn.java
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,71 @@
 +package net.minecraft.server;
 +
 +import java.io.DataInputStream;
@@ -328,7 +364,9 @@ index 0000000..5867eac
 +        dataoutputstream.writeShort(this.h);
 +        dataoutputstream.writeByte(this.i);
 +        dataoutputstream.writeShort(this.j);
-+        dataoutputstream.writeShort(-1);
++        if(protocolVersion == 47) {
++            dataoutputstream.writeShort(-1);
++        }
 +        dataoutputstream.writeInt(this.b);
 +        dataoutputstream.writeInt(this.c);
 +        dataoutputstream.writeInt(this.d);
@@ -383,10 +421,10 @@ index 0000000..153ff1f
 \ No newline at end of file
 diff --git a/src/main/java/net/minecraft/server/Packet4UpdateTime.java b/src/main/java/net/minecraft/server/Packet4UpdateTime.java
 new file mode 100644
-index 0000000..415d41b
+index 0000000..bdb9a63
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/Packet4UpdateTime.java
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,52 @@
 +package net.minecraft.server;
 +
 +import java.io.DataInputStream;
@@ -407,12 +445,16 @@ index 0000000..415d41b
 +
 +    public void a(DataInputStream datainputstream) throws IOException {
 +        this.a = datainputstream.readLong();
-+        this.b = datainputstream.readLong();
++        if(protocolVersion == 47) {
++            this.b = datainputstream.readLong();
++        }
 +    }
 +
 +    public void a(DataOutputStream dataoutputstream) throws IOException {
 +        dataoutputstream.writeLong(this.a);
-+        dataoutputstream.writeLong(this.b);
++        if(protocolVersion == 47) {
++            dataoutputstream.writeLong(this.b);
++        }
 +    }
 +
 +    public void handle(NetHandler nethandler) {
