@@ -1,4 +1,4 @@
-From d760a6d7c2c911da56b9c733da43b48ae0cd33bf Mon Sep 17 00:00:00 2001
+From 45cac5b3c5ebf36eb80ab0ddcdc22dabb1ce5b8d Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
 Date: Thu, 25 Oct 2012 18:45:08 -0500
 Subject: [PATCH] 1.4compat
@@ -14,11 +14,11 @@ Subject: [PATCH] 1.4compat
  .../net/minecraft/server/Packet21PickupSpawn.java  |   71 ++++++++++++++++++
  .../net/minecraft/server/Packet254GetInfo.java     |   28 +++++++
  .../net/minecraft/server/Packet4UpdateTime.java    |   52 +++++++++++++
- .../net/minecraft/server/Packet61WorldEvent.java   |   50 +++++++++++++
+ .../net/minecraft/server/Packet61WorldEvent.java   |   54 ++++++++++++++
  .../server/ServerConfigurationManagerAbstract.java |    4 +-
  .../java/org/bukkit/craftbukkit/CraftSound.java    |    2 +-
  .../java/org/bukkit/craftbukkit/CraftWorld.java    |    2 +-
- 14 files changed, 332 insertions(+), 14 deletions(-)
+ 14 files changed, 336 insertions(+), 14 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/Packet204LocaleAndViewDistance.java
  create mode 100644 src/main/java/net/minecraft/server/Packet21PickupSpawn.java
  create mode 100644 src/main/java/net/minecraft/server/Packet254GetInfo.java
@@ -480,10 +480,10 @@ index 0000000..bdb9a63
 \ No newline at end of file
 diff --git a/src/main/java/net/minecraft/server/Packet61WorldEvent.java b/src/main/java/net/minecraft/server/Packet61WorldEvent.java
 new file mode 100644
-index 0000000..a58d3ce
+index 0000000..259c5bd
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/Packet61WorldEvent.java
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,54 @@
 +package net.minecraft.server;
 +
 +import java.io.DataInputStream;
@@ -514,7 +514,9 @@ index 0000000..a58d3ce
 +        this.d = datainputstream.readByte() & 255;
 +        this.e = datainputstream.readInt();
 +        this.b = datainputstream.readInt();
-+        datainputstream.readBoolean();
++        if(protocolVersion == 47) {
++            datainputstream.readBoolean();
++        }
 +    }
 +
 +    public void a(DataOutputStream dataoutputstream) throws IOException {
@@ -523,7 +525,9 @@ index 0000000..a58d3ce
 +        dataoutputstream.writeByte(this.d & 255);
 +        dataoutputstream.writeInt(this.e);
 +        dataoutputstream.writeInt(this.b);
-+        dataoutputstream.writeBoolean(false);
++        if(protocolVersion == 47) {
++            dataoutputstream.writeBoolean(false);
++        }
 +    }
 +
 +    public void handle(NetHandler nethandler) {
