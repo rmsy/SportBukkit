@@ -1,4 +1,4 @@
-From b44b1b4aee4715f6bcde7c43b536bfb0f94b78c6 Mon Sep 17 00:00:00 2001
+From 0e0c75d106c7fc4082ebd0f1d5c25cb14a12ed27 Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
 Date: Thu, 25 Oct 2012 18:45:08 -0500
 Subject: [PATCH] 1.4compat
@@ -44,7 +44,7 @@ index 826ab5e..361e82f 100644
  
      public void a(Entity entity, int i, double d0, double d1) {
 diff --git a/src/main/java/net/minecraft/server/ItemStack.java b/src/main/java/net/minecraft/server/ItemStack.java
-index efe82d3..34ed454 100644
+index efe82d3..95e16d9 100644
 --- a/src/main/java/net/minecraft/server/ItemStack.java
 +++ b/src/main/java/net/minecraft/server/ItemStack.java
 @@ -34,7 +34,11 @@ public final class ItemStack {
@@ -52,7 +52,7 @@ index efe82d3..34ed454 100644
      public ItemStack(int i, int j, int k) {
          this.count = 0;
 -        this.id = i;
-+        if(i < 137 || (i > 145 && i < 389)) {
++        if(i < 137 || (i > 145 && i < 389) || i > 2255) {
 +            this.id = i;
 +        } else {
 +            this.id = 0;
