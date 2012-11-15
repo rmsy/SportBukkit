@@ -1,0 +1,430 @@
+From 8eea8c16b2a1e7e76b0d3d4d76c72cce0fcccc12 Mon Sep 17 00:00:00 2001
+From: mrapple <tony@oc.tc>
+Date: Wed, 14 Nov 2012 22:34:33 -0600
+Subject: [PATCH] 1.4.4
+
+---
+ .../java/net/minecraft/server/DataWatcher.java     |  281 ++++++++++++++++++++
+ .../java/net/minecraft/server/NetLoginHandler.java |    6 +-
+ .../net/minecraft/server/Packet131ItemData.java    |   45 +++
+ .../java/net/minecraft/server/WatchableObject.java |   44 +++
+ 4 files changed, 373 insertions(+), 3 deletions(-)
+ create mode 100644 src/main/java/net/minecraft/server/DataWatcher.java
+ create mode 100644 src/main/java/net/minecraft/server/Packet131ItemData.java
+ create mode 100644 src/main/java/net/minecraft/server/WatchableObject.java
+
+diff --git a/src/main/java/net/minecraft/server/DataWatcher.java b/src/main/java/net/minecraft/server/DataWatcher.java
+new file mode 100644
+index 0000000..1f3db54
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/DataWatcher.java
+@@ -0,0 +1,281 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.locks.ReadWriteLock;
++import java.util.concurrent.locks.ReentrantReadWriteLock;
++
++public class DataWatcher {
++
++    private static final HashMap a = new HashMap();
++    private final Map b = new HashMap();
++    private boolean c;
++    private ReadWriteLock d = new ReentrantReadWriteLock();
++
++    public DataWatcher() {}
++
++    public void a(int i, Object object) {
++        Integer integer = (Integer) a.get(object.getClass());
++
++        if (integer == null) {
++            throw new IllegalArgumentException("Unknown data type: " + object.getClass());
++        } else if (i > 31) {
++            throw new IllegalArgumentException("Data value id is too big with " + i + "! (Max is " + 31 + ")");
++        } else if (this.b.containsKey(Integer.valueOf(i))) {
++            throw new IllegalArgumentException("Duplicate id value for " + i + "!");
++        } else {
++            WatchableObject watchableobject = new WatchableObject(integer.intValue(), i, object);
++
++            this.d.writeLock().lock();
++            this.b.put(Integer.valueOf(i), watchableobject);
++            this.d.writeLock().unlock();
++        }
++    }
++
++    public void a(int i, int j) {
++        WatchableObject watchableobject = new WatchableObject(j, i, null);
++
++        this.d.writeLock().lock();
++        this.b.put(Integer.valueOf(i), watchableobject);
++        this.d.writeLock().unlock();
++    }
++
++    public byte getByte(int i) {
++        return ((Byte) this.i(i).b()).byteValue();
++    }
++
++    public short getShort(int i) {
++        return ((Short) this.i(i).b()).shortValue();
++    }
++
++    public int getInt(int i) {
++        return ((Integer) this.i(i).b()).intValue();
++    }
++
++    public String getString(int i) {
++        return (String) this.i(i).b();
++    }
++
++    public ItemStack f(int i) {
++        return (ItemStack) this.i(i).b();
++    }
++
++    private WatchableObject i(int i) {
++        this.d.readLock().lock();
++
++        WatchableObject watchableobject;
++
++        try {
++            watchableobject = (WatchableObject) this.b.get(Integer.valueOf(i));
++        } catch (Throwable throwable) {
++            CrashReport crashreport = new CrashReport("getting synched entity data", throwable);
++
++            crashreport.a("EntityData ID", Integer.valueOf(i));
++            throw new ReportedException(crashreport);
++        }
++
++        this.d.readLock().unlock();
++        return watchableobject;
++    }
++
++    public void watch(int i, Object object) {
++        WatchableObject watchableobject = this.i(i);
++
++        if (!object.equals(watchableobject.b())) {
++            watchableobject.a(object);
++            watchableobject.a(true);
++            this.c = true;
++        }
++    }
++
++    public void h(int i) {
++        WatchableObject.a(this.i(i), true);
++        this.c = true;
++    }
++
++    public boolean a() {
++        return this.c;
++    }
++
++    public static void a(List list, DataOutputStream dataoutputstream) throws IOException {
++        if (list != null) {
++            Iterator iterator = list.iterator();
++
++            while (iterator.hasNext()) {
++                WatchableObject watchableobject = (WatchableObject) iterator.next();
++
++                a(dataoutputstream, watchableobject);
++            }
++        }
++
++        dataoutputstream.writeByte(127);
++    }
++
++    public List b() {
++        ArrayList arraylist = null;
++
++        if (this.c) {
++            this.d.readLock().lock();
++            Iterator iterator = this.b.values().iterator();
++
++            while (iterator.hasNext()) {
++                WatchableObject watchableobject = (WatchableObject) iterator.next();
++
++                if (watchableobject.d()) {
++                    watchableobject.a(false);
++                    if (arraylist == null) {
++                        arraylist = new ArrayList();
++                    }
++
++                    arraylist.add(watchableobject);
++                }
++            }
++
++            this.d.readLock().unlock();
++        }
++
++        this.c = false;
++        return arraylist;
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        this.d.readLock().lock();
++        Iterator iterator = this.b.values().iterator();
++
++        while (iterator.hasNext()) {
++            WatchableObject watchableobject = (WatchableObject) iterator.next();
++
++            a(dataoutputstream, watchableobject);
++        }
++
++        this.d.readLock().unlock();
++        dataoutputstream.writeByte(127);
++    }
++
++    public List c() {
++        ArrayList arraylist = null;
++
++        this.d.readLock().lock();
++
++        WatchableObject watchableobject;
++
++        for (Iterator iterator = this.b.values().iterator(); iterator.hasNext(); arraylist.add(watchableobject)) {
++            watchableobject = (WatchableObject) iterator.next();
++            if (arraylist == null) {
++                arraylist = new ArrayList();
++            }
++        }
++
++        this.d.readLock().unlock();
++        return arraylist;
++    }
++
++    private static void a(DataOutputStream dataoutputstream, WatchableObject watchableobject) throws IOException {
++        int i = (watchableobject.c() << 5 | watchableobject.a() & 31) & 255;
++
++        dataoutputstream.writeByte(i);
++        switch (watchableobject.c()) {
++        case 0:
++            dataoutputstream.writeByte(((Byte) watchableobject.b()).byteValue());
++            break;
++
++        case 1:
++            dataoutputstream.writeShort(((Short) watchableobject.b()).shortValue());
++            break;
++
++        case 2:
++            dataoutputstream.writeInt(((Integer) watchableobject.b()).intValue());
++            break;
++
++        case 3:
++            dataoutputstream.writeFloat(((Float) watchableobject.b()).floatValue());
++            break;
++
++        case 4:
++            Packet.a((String) watchableobject.b(), dataoutputstream);
++            break;
++
++        case 5:
++            ItemStack itemstack = (ItemStack) watchableobject.b();
++
++            Packet.a(itemstack, dataoutputstream);
++            break;
++
++        case 6:
++            ChunkCoordinates chunkcoordinates = (ChunkCoordinates) watchableobject.b();
++
++            dataoutputstream.writeInt(chunkcoordinates.x);
++            dataoutputstream.writeInt(chunkcoordinates.y);
++            dataoutputstream.writeInt(chunkcoordinates.z);
++        }
++    }
++
++    public static List a(DataInputStream datainputstream) throws IOException {
++        ArrayList arraylist = null;
++
++        for (byte b0 = datainputstream.readByte(); b0 != 127; b0 = datainputstream.readByte()) {
++            if (arraylist == null) {
++                arraylist = new ArrayList();
++            }
++
++            int i = (b0 & 224) >> 5;
++            int j = b0 & 31;
++            WatchableObject watchableobject = null;
++
++            switch (i) {
++            case 0:
++                watchableobject = new WatchableObject(i, j, Byte.valueOf(datainputstream.readByte()));
++                break;
++
++            case 1:
++                watchableobject = new WatchableObject(i, j, Short.valueOf(datainputstream.readShort()));
++                break;
++
++            case 2:
++                watchableobject = new WatchableObject(i, j, Integer.valueOf(datainputstream.readInt()));
++                break;
++
++            case 3:
++                watchableobject = new WatchableObject(i, j, Float.valueOf(datainputstream.readFloat()));
++                break;
++
++            case 4:
++                watchableobject = new WatchableObject(i, j, Packet.a(datainputstream, 64));
++                break;
++
++            case 5:
++                short short1 = datainputstream.readShort();
++
++                watchableobject = new WatchableObject(i, j, Packet.c(datainputstream));
++                break;
++
++            case 6:
++                int k = datainputstream.readInt();
++                int l = datainputstream.readInt();
++                int i1 = datainputstream.readInt();
++
++                watchableobject = new WatchableObject(i, j, new ChunkCoordinates(k, l, i1));
++            }
++
++            arraylist.add(watchableobject);
++        }
++
++        return arraylist;
++    }
++
++    static {
++        a.put(Byte.class, Integer.valueOf(0));
++        a.put(Short.class, Integer.valueOf(1));
++        a.put(Integer.class, Integer.valueOf(2));
++        a.put(Float.class, Integer.valueOf(3));
++        a.put(String.class, Integer.valueOf(4));
++        a.put(ItemStack.class, Integer.valueOf(5));
++        a.put(ChunkCoordinates.class, Integer.valueOf(6));
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/NetLoginHandler.java b/src/main/java/net/minecraft/server/NetLoginHandler.java
+index f46a83a..977c89c 100644
+--- a/src/main/java/net/minecraft/server/NetLoginHandler.java
++++ b/src/main/java/net/minecraft/server/NetLoginHandler.java
+@@ -73,8 +73,8 @@ public class NetLoginHandler extends NetHandler {
+         } else {
+             PublicKey publickey = this.server.F().getPublic();
+ 
+-            if (packet2handshake.d() != 47) {
+-                if (packet2handshake.d() > 47) {
++            if (packet2handshake.d() != 49) {
++                if (packet2handshake.d() > 49) {
+                     this.disconnect("Outdated server!");
+                 } else {
+                     this.disconnect("Outdated client!");
+@@ -151,7 +151,7 @@ public class NetLoginHandler extends NetHandler {
+ 
+             if (packet254getinfo.a == 1) {
+                 // CraftBukkit start - fix decompile issues, don't create a list from an array
+-                Object[] list = new Object[] { 1, 47, this.server.getVersion(), pingEvent.getMotd(), serverconfigurationmanagerabstract.getPlayerCount(), pingEvent.getMaxPlayers() };
++                Object[] list = new Object[] { 1, 49, this.server.getVersion(), pingEvent.getMotd(), serverconfigurationmanagerabstract.getPlayerCount(), pingEvent.getMaxPlayers() };
+ 
+                 for (Object object : list) {
+                     if (s == null) {
+diff --git a/src/main/java/net/minecraft/server/Packet131ItemData.java b/src/main/java/net/minecraft/server/Packet131ItemData.java
+new file mode 100644
+index 0000000..98d4de0
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet131ItemData.java
+@@ -0,0 +1,45 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet131ItemData extends Packet {
++
++    public short a;
++    public short b;
++    public byte[] c;
++
++    public Packet131ItemData() {
++        this.lowPriority = true;
++    }
++
++    public Packet131ItemData(short short1, short short2, byte[] abyte) {
++        this.lowPriority = true;
++        this.a = short1;
++        this.b = short2;
++        this.c = abyte;
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = datainputstream.readShort();
++        this.b = datainputstream.readShort();
++        this.c = new byte[datainputstream.readUnsignedShort()];
++        datainputstream.readFully(this.c);
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        dataoutputstream.writeShort(this.a);
++        dataoutputstream.writeShort(this.b);
++        dataoutputstream.writeShort(this.c.length);
++        dataoutputstream.write(this.c);
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 4 + this.c.length;
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/WatchableObject.java b/src/main/java/net/minecraft/server/WatchableObject.java
+new file mode 100644
+index 0000000..678aa91
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/WatchableObject.java
+@@ -0,0 +1,44 @@
++package net.minecraft.server;
++
++public class WatchableObject {
++
++    private final int a;
++    private final int b;
++    private Object c;
++    private boolean d;
++
++    public WatchableObject(int i, int j, Object object) {
++        this.b = j;
++        this.c = object;
++        this.a = i;
++        this.d = true;
++    }
++
++    public int a() {
++        return this.b;
++    }
++
++    public void a(Object object) {
++        this.c = object;
++    }
++
++    public Object b() {
++        return this.c;
++    }
++
++    public int c() {
++        return this.a;
++    }
++
++    public boolean d() {
++        return this.d;
++    }
++
++    public void a(boolean flag) {
++        this.d = flag;
++    }
++
++    static boolean a(WatchableObject watchableobject, boolean flag) {
++        return watchableobject.d = flag;
++    }
++}
+-- 
+1.7.4.4
+
