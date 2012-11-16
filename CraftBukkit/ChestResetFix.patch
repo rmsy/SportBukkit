@@ -5,7 +5,7 @@ Subject: [PATCH] Fix a player's container not being reset before opening a
  chest
 
 ---
- src/main/java/net/minecraft/server/BlockChest.java |  326 ++++++++++++++++++++
+ src/main/java/net/minecraft/server/BlockChest.java |  341 ++++++++++++++++++++
  1 files changed, 326 insertions(+), 0 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/BlockChest.java
 
@@ -14,7 +14,7 @@ new file mode 100644
 index 0000000..05ca0e1
 --- /dev/null
 +++ b/src/main/java/net/minecraft/server/BlockChest.java
-@@ -0,0 +1,326 @@
+@@ -0,0 +1,341 @@
 +package net.minecraft.server;
 +
 +import java.util.Iterator;
@@ -28,6 +28,7 @@ index 0000000..05ca0e1
 +        super(i, Material.WOOD);
 +        this.textureId = 26;
 +        this.a(CreativeModeTab.c);
++        this.a(0.0625F, 0.0F, 0.0625F, 0.9375F, 0.875F, 0.9375F);
 +    }
 +
 +    public boolean c() {
@@ -40,6 +41,20 @@ index 0000000..05ca0e1
 +
 +    public int d() {
 +        return 22;
++    }
++
++    public void updateShape(IBlockAccess iblockaccess, int i, int j, int k) {
++        if (iblockaccess.getTypeId(i, j, k - 1) == this.id) {
++            this.a(0.0625F, 0.0F, 0.0F, 0.9375F, 0.875F, 0.9375F);
++        } else if (iblockaccess.getTypeId(i, j, k + 1) == this.id) {
++            this.a(0.0625F, 0.0F, 0.0625F, 0.9375F, 0.875F, 1.0F);
++        } else if (iblockaccess.getTypeId(i - 1, j, k) == this.id) {
++            this.a(0.0F, 0.0F, 0.0625F, 0.9375F, 0.875F, 0.9375F);
++        } else if (iblockaccess.getTypeId(i + 1, j, k) == this.id) {
++            this.a(0.0625F, 0.0F, 0.0625F, 1.0F, 0.875F, 0.9375F);
++        } else {
++            this.a(0.0625F, 0.0F, 0.0625F, 0.9375F, 0.875F, 0.9375F);
++        }
 +    }
 +
 +    public void onPlace(World world, int i, int j, int k) {
