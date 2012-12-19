@@ -1,0 +1,225 @@
+From 27a37faa1906ca05b02f28bc923ef9a83457ab5a Mon Sep 17 00:00:00 2001
+From: mrapple <tony@oc.tc>
+Date: Tue, 18 Dec 2012 23:01:43 -0600
+Subject: [PATCH] 1.4.6 compat
+
+---
+ .../java/net/minecraft/server/DedicatedServer.java |    2 +-
+ .../net/minecraft/server/EntityTrackerEntry.java   |    8 +--
+ .../java/net/minecraft/server/MinecraftServer.java |    2 +-
+ .../java/net/minecraft/server/NetLoginHandler.java |    6 +-
+ .../net/minecraft/server/Packet23VehicleSpawn.java |  112 ++++++++++++++++++++
+ .../net/minecraft/server/Packet56MapChunkBulk.java |    2 +
+ 6 files changed, 120 insertions(+), 12 deletions(-)
+ create mode 100644 src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
+
+diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
+index 3b0ec70..82a67e8 100644
+--- a/src/main/java/net/minecraft/server/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/DedicatedServer.java
+@@ -47,7 +47,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+         System.setErr(new PrintStream(new LoggerOutputStream(log, Level.SEVERE), true));
+         // CraftBukkit end
+
+-        log.info("Starting minecraft server version 1.4.5");
++        log.info("Starting minecraft server version 1.4.6-compat");
+         if (Runtime.getRuntime().maxMemory() / 1024L / 1024L < 512L) {
+             log.warning("To start the server with more ram, launch it as \"java -Xmx1024M -Xms1024M -jar minecraft_server.jar\"");
+         }
+diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
+index 5187674..1bca383 100644
+--- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
++++ b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
+@@ -377,13 +377,7 @@ public class EntityTrackerEntry {
+         }
+
+         if (this.tracker instanceof EntityItem) {
+-            EntityItem entityitem = (EntityItem) this.tracker;
+-            Packet21PickupSpawn entityminecart0 = new Packet21PickupSpawn(entityitem);
+-
+-            entityitem.locX = (double) entityminecart0.b / 32.0D;
+-            entityitem.locY = (double) entityminecart0.c / 32.0D;
+-            entityitem.locZ = (double) entityminecart0.d / 32.0D;
+-            return entityminecart0;
++            return new Packet23VehicleSpawn(this.tracker, 2, 1); // CraftBukkit
+         } else if (this.tracker instanceof EntityPlayer) {
+             return new Packet20NamedEntitySpawn((EntityHuman) this.tracker);
+         } else {
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 6b10bfc..18ff1a4 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -757,7 +757,7 @@ public abstract class MinecraftServer implements ICommandListener, Runnable, IMo
+     }
+
+     public String getVersion() {
+-        return "1.4.5";
++        return "1.4.6";
+     }
+
+     public int y() {
+diff --git a/src/main/java/net/minecraft/server/NetLoginHandler.java b/src/main/java/net/minecraft/server/NetLoginHandler.java
+index 60a1997..0d59856 100644
+--- a/src/main/java/net/minecraft/server/NetLoginHandler.java
++++ b/src/main/java/net/minecraft/server/NetLoginHandler.java
+@@ -77,8 +77,8 @@ public class NetLoginHandler extends NetHandler {
+         } else {
+             PublicKey publickey = this.server.F().getPublic();
+
+-            if (packet2handshake.d() != 49) {
+-                if (packet2handshake.d() > 49) {
++            if (packet2handshake.d() != 51) {
++                if (packet2handshake.d() > 51) {
+                     this.disconnect("Outdated server!");
+                 } else {
+                     this.disconnect("Outdated client!");
+@@ -162,7 +162,7 @@ public class NetLoginHandler extends NetHandler {
+
+             if (packet254getinfo.a == 1) {
+                 // CraftBukkit start - fix decompile issues, don't create a list from an array
+-                Object[] list = new Object[] { 1, 49, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
++                Object[] list = new Object[] { 1, 51, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
+
+                 for (Object object : list) {
+                     if (s == null) {
+diff --git a/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java b/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
+new file mode 100644
+index 0000000..61543f8
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
+@@ -0,0 +1,112 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException; // CraftBukkit
++
++public class Packet23VehicleSpawn extends Packet {
++
++    public int a;
++    public int b;
++    public int c;
++    public int d;
++    public int e;
++    public int f;
++    public int g;
++    public int h;
++    public int i;
++    public int j; // CraftBukkit
++    public int k; // CraftBukkit
++
++    public Packet23VehicleSpawn() {}
++
++    public Packet23VehicleSpawn(Entity entity, int i) {
++        this(entity, i, 0);
++    }
++
++    public Packet23VehicleSpawn(Entity entity, int i, int j) {
++        this.a = entity.id;
++        this.b = MathHelper.floor(entity.locX * 32.0D);
++        this.c = MathHelper.floor(entity.locY * 32.0D);
++        this.d = MathHelper.floor(entity.locZ * 32.0D);
++        this.i = MathHelper.floor(entity.pitch * 256.0F / 360.0F); // CraftBukkit
++        this.j = MathHelper.floor(entity.yaw * 256.0F / 360.0F); // CraftBukkit
++        this.j = i; // CraftBukkit
++        this.k = j; // CraftBukkit
++
++        if (j > 0) {
++            double d0 = entity.motX;
++            double d1 = entity.motY;
++            double d2 = entity.motZ;
++            double d3 = 3.9D;
++
++            if (d0 < -d3) {
++                d0 = -d3;
++            }
++
++            if (d1 < -d3) {
++                d1 = -d3;
++            }
++
++            if (d2 < -d3) {
++                d2 = -d3;
++            }
++
++            if (d0 > d3) {
++                d0 = d3;
++            }
++
++            if (d1 > d3) {
++                d1 = d3;
++            }
++
++            if (d2 > d3) {
++                d2 = d3;
++            }
++
++            this.e = (int) (d0 * 8000.0D);
++            this.f = (int) (d1 * 8000.0D);
++            this.g = (int) (d2 * 8000.0D);
++        }
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException { // CraftBukkit
++        this.a = datainputstream.readInt();
++        this.j = datainputstream.readByte(); // CraftBukkit
++        this.b = datainputstream.readInt();
++        this.c = datainputstream.readInt();
++        this.d = datainputstream.readInt();
++        this.h = datainputstream.readByte(); // CraftBukkit
++        this.i = datainputstream.readByte(); // CraftBukkit
++        this.k = datainputstream.readInt(); // CraftBukkit
++        if (this.k > 0) { // CraftBukkit
++            this.e = datainputstream.readShort();
++            this.f = datainputstream.readShort();
++            this.g = datainputstream.readShort();
++        }
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException { // CraftBukkit
++        dataoutputstream.writeInt(this.a);
++        dataoutputstream.writeByte(this.j); // CraftBukkit
++        dataoutputstream.writeInt(this.b);
++        dataoutputstream.writeInt(this.c);
++        dataoutputstream.writeInt(this.d);
++        dataoutputstream.writeByte(this.h); // CraftBukkit
++        dataoutputstream.writeByte(this.i); // CraftBukkit
++        dataoutputstream.writeInt(this.k); // CraftBukkit
++        if (this.k > 0) {
++            dataoutputstream.writeShort(this.e);
++            dataoutputstream.writeShort(this.f);
++            dataoutputstream.writeShort(this.g);
++        }
++    }
++
++    public void handle(NetHandler nethandler) {
++        nethandler.a(this);
++    }
++
++    public int a() {
++        return 21 + this.k > 0 ? 6 : 0; // CraftBukkit
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/Packet56MapChunkBulk.java b/src/main/java/net/minecraft/server/Packet56MapChunkBulk.java
+index 07681a8..fbf07d9 100644
+--- a/src/main/java/net/minecraft/server/Packet56MapChunkBulk.java
++++ b/src/main/java/net/minecraft/server/Packet56MapChunkBulk.java
+@@ -94,6 +94,7 @@ public class Packet56MapChunkBulk extends Packet {
+         short short1 = datainputstream.readShort();
+
+         this.size = datainputstream.readInt();
++        datainputstream.readBoolean(); // CraftBukkit
+         this.c = new int[short1];
+         this.d = new int[short1];
+         this.a = new int[short1];
+@@ -143,6 +144,7 @@ public class Packet56MapChunkBulk extends Packet {
+         compress(); // CraftBukkit
+         dataoutputstream.writeShort(this.c.length);
+         dataoutputstream.writeInt(this.size);
++        dataoutputstream.writeBoolean(true); // CraftBukkit
+         dataoutputstream.write(this.buffer, 0, this.size);
+
+         for (int i = 0; i < this.c.length; ++i) {
+--
+1.7.4.4
+
