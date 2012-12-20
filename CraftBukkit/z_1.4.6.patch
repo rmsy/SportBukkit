@@ -1,16 +1,16 @@
-From 27a37faa1906ca05b02f28bc923ef9a83457ab5a Mon Sep 17 00:00:00 2001
+From 294544c39a659487d8664d1e6d7ea6fedfef4c78 Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
-Date: Tue, 18 Dec 2012 23:01:43 -0600
+Date: Thu, 20 Dec 2012 08:20:48 -0600
 Subject: [PATCH] 1.4.6 compat
 
 ---
  .../java/net/minecraft/server/DedicatedServer.java |    2 +-
- .../net/minecraft/server/EntityTrackerEntry.java   |    8 +--
+ .../net/minecraft/server/EntityTrackerEntry.java   |   10 +-
  .../java/net/minecraft/server/MinecraftServer.java |    2 +-
  .../java/net/minecraft/server/NetLoginHandler.java |    6 +-
  .../net/minecraft/server/Packet23VehicleSpawn.java |  112 ++++++++++++++++++++
  .../net/minecraft/server/Packet56MapChunkBulk.java |    2 +
- 6 files changed, 120 insertions(+), 12 deletions(-)
+ 6 files changed, 121 insertions(+), 13 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
 
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
@@ -20,19 +20,28 @@ index 3b0ec70..82a67e8 100644
 @@ -47,7 +47,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
          System.setErr(new PrintStream(new LoggerOutputStream(log, Level.SEVERE), true));
          // CraftBukkit end
-
+ 
 -        log.info("Starting minecraft server version 1.4.5");
 +        log.info("Starting minecraft server version 1.4.6-compat");
          if (Runtime.getRuntime().maxMemory() / 1024L / 1024L < 512L) {
              log.warning("To start the server with more ram, launch it as \"java -Xmx1024M -Xms1024M -jar minecraft_server.jar\"");
          }
 diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
-index 5187674..1bca383 100644
+index 5187674..f7e88a2 100644
 --- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 +++ b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
+@@ -298,7 +298,7 @@ public class EntityTrackerEntry {
+                     Packet packet = this.b();
+ 
+                     entityplayer.netServerHandler.sendPacket(packet);
+-                    if (this.tracker instanceof EntityItemFrame) {
++                    if (!this.tracker.getDataWatcher().a()) {
+                         entityplayer.netServerHandler.sendPacket(new Packet40EntityMetadata(this.tracker.id, this.tracker.getDataWatcher(), true));
+                     }
+ 
 @@ -377,13 +377,7 @@ public class EntityTrackerEntry {
          }
-
+ 
          if (this.tracker instanceof EntityItem) {
 -            EntityItem entityitem = (EntityItem) this.tracker;
 -            Packet21PickupSpawn entityminecart0 = new Packet21PickupSpawn(entityitem);
@@ -51,12 +60,12 @@ index 6b10bfc..18ff1a4 100644
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -757,7 +757,7 @@ public abstract class MinecraftServer implements ICommandListener, Runnable, IMo
      }
-
+ 
      public String getVersion() {
 -        return "1.4.5";
 +        return "1.4.6";
      }
-
+ 
      public int y() {
 diff --git a/src/main/java/net/minecraft/server/NetLoginHandler.java b/src/main/java/net/minecraft/server/NetLoginHandler.java
 index 60a1997..0d59856 100644
@@ -65,7 +74,7 @@ index 60a1997..0d59856 100644
 @@ -77,8 +77,8 @@ public class NetLoginHandler extends NetHandler {
          } else {
              PublicKey publickey = this.server.F().getPublic();
-
+ 
 -            if (packet2handshake.d() != 49) {
 -                if (packet2handshake.d() > 49) {
 +            if (packet2handshake.d() != 51) {
@@ -74,12 +83,12 @@ index 60a1997..0d59856 100644
                  } else {
                      this.disconnect("Outdated client!");
 @@ -162,7 +162,7 @@ public class NetLoginHandler extends NetHandler {
-
+ 
              if (packet254getinfo.a == 1) {
                  // CraftBukkit start - fix decompile issues, don't create a list from an array
 -                Object[] list = new Object[] { 1, 49, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
 +                Object[] list = new Object[] { 1, 51, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
-
+ 
                  for (Object object : list) {
                      if (s == null) {
 diff --git a/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java b/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
@@ -206,7 +215,7 @@ index 07681a8..fbf07d9 100644
 +++ b/src/main/java/net/minecraft/server/Packet56MapChunkBulk.java
 @@ -94,6 +94,7 @@ public class Packet56MapChunkBulk extends Packet {
          short short1 = datainputstream.readShort();
-
+ 
          this.size = datainputstream.readInt();
 +        datainputstream.readBoolean(); // CraftBukkit
          this.c = new int[short1];
@@ -218,8 +227,8 @@ index 07681a8..fbf07d9 100644
          dataoutputstream.writeInt(this.size);
 +        dataoutputstream.writeBoolean(true); // CraftBukkit
          dataoutputstream.write(this.buffer, 0, this.size);
-
+ 
          for (int i = 0; i < this.c.length; ++i) {
---
-1.7.4.4
+-- 
+1.7.9.5
 
