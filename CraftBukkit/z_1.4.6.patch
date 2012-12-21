@@ -1,18 +1,52 @@
-From 294544c39a659487d8664d1e6d7ea6fedfef4c78 Mon Sep 17 00:00:00 2001
+From 1f8bc138bae3d5dc92cd73fae1fc740d64708922 Mon Sep 17 00:00:00 2001
 From: mrapple <tony@oc.tc>
-Date: Thu, 20 Dec 2012 08:20:48 -0600
+Date: Thu, 20 Dec 2012 21:23:35 -0600
 Subject: [PATCH] 1.4.6 compat
 
 ---
+ src/main/java/net/minecraft/server/BlockChest.java |    2 +-
+ .../java/net/minecraft/server/BlockDispenser.java  |    2 +-
  .../java/net/minecraft/server/DedicatedServer.java |    2 +-
- .../net/minecraft/server/EntityTrackerEntry.java   |   10 +-
+ .../net/minecraft/server/DispenseBehaviorItem.java |    2 +-
+ src/main/java/net/minecraft/server/EntityItem.java |  110 +++++++++++--------
+ .../java/net/minecraft/server/EntityLiving.java    |    4 +-
+ .../java/net/minecraft/server/EntityMinecart.java  |    2 +-
+ .../net/minecraft/server/EntityTrackerEntry.java   |   10 +--
  .../java/net/minecraft/server/MinecraftServer.java |    2 +-
  .../java/net/minecraft/server/NetLoginHandler.java |    6 +-
+ .../net/minecraft/server/NetServerHandler.java     |   15 ---
  .../net/minecraft/server/Packet23VehicleSpawn.java |  112 ++++++++++++++++++++
  .../net/minecraft/server/Packet56MapChunkBulk.java |    2 +
- 6 files changed, 121 insertions(+), 13 deletions(-)
+ .../org/bukkit/craftbukkit/entity/CraftItem.java   |    4 +-
+ 14 files changed, 193 insertions(+), 82 deletions(-)
  create mode 100644 src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
 
+diff --git a/src/main/java/net/minecraft/server/BlockChest.java b/src/main/java/net/minecraft/server/BlockChest.java
+index 20c488e..fa353be 100644
+--- a/src/main/java/net/minecraft/server/BlockChest.java
++++ b/src/main/java/net/minecraft/server/BlockChest.java
+@@ -263,7 +263,7 @@ public class BlockChest extends BlockContainer {
+                         entityitem.motY = (double) ((float) this.a.nextGaussian() * f3 + 0.2F);
+                         entityitem.motZ = (double) ((float) this.a.nextGaussian() * f3);
+                         if (itemstack.hasTag()) {
+-                            entityitem.itemStack.setTag((NBTTagCompound) itemstack.getTag().clone());
++                            entityitem.getItemStack().setTag((NBTTagCompound) itemstack.getTag().clone());
+                         }
+                     }
+                 }
+diff --git a/src/main/java/net/minecraft/server/BlockDispenser.java b/src/main/java/net/minecraft/server/BlockDispenser.java
+index 6848309..151fabb 100644
+--- a/src/main/java/net/minecraft/server/BlockDispenser.java
++++ b/src/main/java/net/minecraft/server/BlockDispenser.java
+@@ -160,7 +160,7 @@ public class BlockDispenser extends BlockContainer {
+                         EntityItem entityitem = new EntityItem(world, (double) ((float) i + f), (double) ((float) j + f1), (double) ((float) k + f2), new ItemStack(itemstack.id, k1, itemstack.getData()));
+ 
+                         if (itemstack.hasTag()) {
+-                            entityitem.itemStack.setTag((NBTTagCompound) itemstack.getTag().clone());
++                            entityitem.getItemStack().setTag((NBTTagCompound) itemstack.getTag().clone());
+                         }
+ 
+                         float f3 = 0.05F;
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
 index 3b0ec70..82a67e8 100644
 --- a/src/main/java/net/minecraft/server/DedicatedServer.java
@@ -26,6 +60,274 @@ index 3b0ec70..82a67e8 100644
          if (Runtime.getRuntime().maxMemory() / 1024L / 1024L < 512L) {
              log.warning("To start the server with more ram, launch it as \"java -Xmx1024M -Xms1024M -jar minecraft_server.jar\"");
          }
+diff --git a/src/main/java/net/minecraft/server/DispenseBehaviorItem.java b/src/main/java/net/minecraft/server/DispenseBehaviorItem.java
+index 1e7161a..42e08a2 100644
+--- a/src/main/java/net/minecraft/server/DispenseBehaviorItem.java
++++ b/src/main/java/net/minecraft/server/DispenseBehaviorItem.java
+@@ -61,7 +61,7 @@ public class DispenseBehaviorItem implements IDispenseBehavior {
+             return false;
+         }
+ 
+-        entityitem.itemStack = CraftItemStack.asNMSCopy(event.getItem());
++        entityitem.setItemStack(CraftItemStack.asNMSCopy(event.getItem()));
+         entityitem.motX = event.getVelocity().getX();
+         entityitem.motY = event.getVelocity().getY();
+         entityitem.motZ = event.getVelocity().getZ();
+diff --git a/src/main/java/net/minecraft/server/EntityItem.java b/src/main/java/net/minecraft/server/EntityItem.java
+index a1dca16..ef32f7a 100644
+--- a/src/main/java/net/minecraft/server/EntityItem.java
++++ b/src/main/java/net/minecraft/server/EntityItem.java
+@@ -6,28 +6,20 @@ import org.bukkit.event.player.PlayerPickupItemEvent; // CraftBukkit
+ 
+ public class EntityItem extends Entity {
+ 
+-    public ItemStack itemStack;
+-    public int age = 0;
++    public int age;
+     public int pickupDelay;
+-    private int e = 5;
+-    public float d = (float) (Math.random() * 3.141592653589793D * 2.0D);
++    private int e;
++    public float c;
+     private int lastTick = (int) (System.currentTimeMillis() / 50); // CraftBukkit
+ 
+-    public EntityItem(World world, double d0, double d1, double d2, ItemStack itemstack) {
++    public EntityItem(World world, double d0, double d1, double d2) {
+         super(world);
++        this.age = 0;
++        this.e = 5;
++        this.c = (float) (Math.random() * 3.141592653589793D * 2.0D);
+         this.a(0.25F, 0.25F);
+         this.height = this.length / 2.0F;
+         this.setPosition(d0, d1, d2);
+-        this.itemStack = itemstack;
+-
+-        // CraftBukkit start - infinite item fix & nullcheck
+-        if (this.itemStack == null) {
+-            throw new IllegalArgumentException("Can't create an EntityItem for a null item");
+-        }
+-        if (this.itemStack.count <= -1) {
+-            this.itemStack.count = 1;
+-        }
+-        // CraftBukkit end
+ 
+         this.yaw = (float) (Math.random() * 360.0D);
+         this.motX = (double) ((float) (Math.random() * 0.20000000298023224D - 0.10000000149011612D));
+@@ -35,17 +27,27 @@ public class EntityItem extends Entity {
+         this.motZ = (double) ((float) (Math.random() * 0.20000000298023224D - 0.10000000149011612D));
+     }
+ 
++    public EntityItem(World world, double d0, double d1, double d2, ItemStack itemstack) {
++        this(world, d0, d1, d2);
++        this.setItemStack(itemstack);
++    }
++
+     protected boolean f_() {
+         return false;
+     }
+ 
+     public EntityItem(World world) {
+         super(world);
++        this.age = 0;
++        this.e = 5;
++        this.c = (float) (Math.random() * 3.141592653589793D * 2.0D);
+         this.a(0.25F, 0.25F);
+         this.height = this.length / 2.0F;
+     }
+ 
+-    protected void a() {}
++    protected void a() {
++        this.getDataWatcher().a(10, 5);
++    }
+ 
+     public void j_() {
+         super.j_();
+@@ -63,7 +65,7 @@ public class EntityItem extends Entity {
+         this.move(this.motX, this.motY, this.motZ);
+         boolean flag = (int) this.lastX != (int) this.locX || (int) this.lastY != (int) this.locY || (int) this.lastZ != (int) this.locZ;
+ 
+-        if (flag) {
++        if (flag || this.ticksLived % 25 == 0) {
+             if (this.world.getMaterial(MathHelper.floor(this.locX), MathHelper.floor(this.locY), MathHelper.floor(this.locZ)) == Material.LAVA) {
+                 this.motY = 0.20000000298023224D;
+                 this.motX = (double) ((this.random.nextFloat() - this.random.nextFloat()) * 0.2F);
+@@ -120,26 +122,26 @@ public class EntityItem extends Entity {
+         if (entityitem == this) {
+             return false;
+         } else if (entityitem.isAlive() && this.isAlive()) {
+-            if (entityitem.itemStack.getItem() != this.itemStack.getItem()) {
++            ItemStack itemstack = this.getItemStack();
++            ItemStack itemstack1 = entityitem.getItemStack();
++
++            if (itemstack1.getItem() != itemstack.getItem()) {
+                 return false;
+-            } else if (entityitem.itemStack.hasTag() ^ this.itemStack.hasTag()) {
++            } else if (itemstack1.hasTag() ^ itemstack.hasTag()) {
+                 return false;
+-            } else if (entityitem.itemStack.hasTag() && !entityitem.itemStack.getTag().equals(this.itemStack.getTag())) {
++            } else if (itemstack1.hasTag() && !itemstack1.getTag().equals(itemstack.getTag())) {
+                 return false;
+-            } else if (entityitem.itemStack.getItem().l() && entityitem.itemStack.getData() != this.itemStack.getData()) {
++            } else if (itemstack1.getItem().l() && itemstack1.getData() != itemstack.getData()) {
+                 return false;
+-            } else if (entityitem.itemStack.count < this.itemStack.count) {
++            } else if (itemstack1.count < itemstack.count) {
+                 return entityitem.a(this);
+-            } else if (entityitem.itemStack.count + this.itemStack.count > entityitem.itemStack.getMaxStackSize()) {
++            } else if (itemstack1.count + itemstack.count > itemstack1.getMaxStackSize()) {
+                 return false;
+-            // CraftBukkit start - don't merge items with enchantments
+-            } else if (entityitem.itemStack.hasEnchantments() || this.itemStack.hasEnchantments()) {
+-                return false;
+-                // CraftBukkit end
+             } else {
+-                entityitem.itemStack.count += this.itemStack.count;
++                itemstack1.count += itemstack.count;
+                 entityitem.pickupDelay = Math.max(entityitem.pickupDelay, this.pickupDelay);
+                 entityitem.age = Math.min(entityitem.age, this.age);
++                entityitem.setItemStack(itemstack1);
+                 this.die();
+                 return true;
+             }
+@@ -177,8 +179,8 @@ public class EntityItem extends Entity {
+     public void b(NBTTagCompound nbttagcompound) {
+         nbttagcompound.setShort("Health", (short) ((byte) this.e));
+         nbttagcompound.setShort("Age", (short) this.age);
+-        if (this.itemStack != null) {
+-            nbttagcompound.setCompound("Item", this.itemStack.save(new NBTTagCompound()));
++        if (this.getItemStack() != null) {
++            nbttagcompound.setCompound("Item", this.getItemStack().save(new NBTTagCompound()));
+         }
+     }
+ 
+@@ -187,26 +189,27 @@ public class EntityItem extends Entity {
+         this.age = nbttagcompound.getShort("Age");
+         NBTTagCompound nbttagcompound1 = nbttagcompound.getCompound("Item");
+ 
+-        this.itemStack = ItemStack.a(nbttagcompound1);
+-        if (this.itemStack == null) {
++        this.setItemStack(ItemStack.a(nbttagcompound1));
++        if (this.getItemStack() == null) {
+             this.die();
+         }
+     }
+ 
+     public void c_(EntityHuman entityhuman) {
+-        if ((!this.world.isStatic) && (this.itemStack != null)) { // CraftBukkit - nullcheck
+-            int i = this.itemStack.count;
++        if ((!this.world.isStatic) && (this.getItemStack() != null)) { // CraftBukkit - nullcheck
++            ItemStack itemstack = this.getItemStack();
++            int i = itemstack.count;
+ 
+             // CraftBukkit start
+-            int canHold = entityhuman.inventory.canHold(this.itemStack);
+-            int remaining = this.itemStack.count - canHold;
++            int canHold = entityhuman.inventory.canHold(itemstack);
++            int remaining = itemstack.count - canHold;
+ 
+             if (this.pickupDelay <= 0 && canHold > 0) {
+-                this.itemStack.count = canHold;
++                itemstack.count = canHold;
+                 PlayerPickupItemEvent event = new PlayerPickupItemEvent((org.bukkit.entity.Player) entityhuman.getBukkitEntity(), (org.bukkit.entity.Item) this.getBukkitEntity(), remaining);
+                 event.setCancelled(!entityhuman.canPickUpLoot);
+                 this.world.getServer().getPluginManager().callEvent(event);
+-                this.itemStack.count = canHold + remaining;
++                itemstack.count = canHold + remaining;
+ 
+                 if (event.isCancelled()) {
+                     return;
+@@ -217,26 +220,26 @@ public class EntityItem extends Entity {
+             }
+             // CraftBukkit end
+ 
+-            if (this.pickupDelay == 0 && entityhuman.inventory.pickup(this.itemStack)) {
+-                if (this.itemStack.id == Block.LOG.id) {
++            if (this.pickupDelay == 0 && entityhuman.inventory.pickup(itemstack)) {
++                if (itemstack.id == Block.LOG.id) {
+                     entityhuman.a((Statistic) AchievementList.g);
+                 }
+ 
+-                if (this.itemStack.id == Item.LEATHER.id) {
++                if (itemstack.id == Item.LEATHER.id) {
+                     entityhuman.a((Statistic) AchievementList.t);
+                 }
+ 
+-                if (this.itemStack.id == Item.DIAMOND.id) {
++                if (itemstack.id == Item.DIAMOND.id) {
+                     entityhuman.a((Statistic) AchievementList.w);
+                 }
+ 
+-                if (this.itemStack.id == Item.BLAZE_ROD.id) {
++                if (itemstack.id == Item.BLAZE_ROD.id) {
+                     entityhuman.a((Statistic) AchievementList.z);
+                 }
+ 
+                 this.makeSound("random.pop", 0.2F, ((this.random.nextFloat() - this.random.nextFloat()) * 0.7F + 1.0F) * 2.0F);
+                 entityhuman.receive(this, i);
+-                if (this.itemStack.count <= 0) {
++                if (itemstack.count <= 0) {
+                     this.die();
+                 }
+             }
+@@ -244,8 +247,7 @@ public class EntityItem extends Entity {
+     }
+ 
+     public String getLocalizedName() {
+-        if (this.itemStack == null) return LocaleI18n.get("item.unknown"); // CraftBukkit - nullcheck
+-        return LocaleI18n.get("item." + this.itemStack.a());
++        return LocaleI18n.get("item." + this.getItemStack().a());
+     }
+ 
+     public boolean aq() {
+@@ -258,4 +260,20 @@ public class EntityItem extends Entity {
+             this.d();
+         }
+     }
++
++    public ItemStack getItemStack() {
++        ItemStack itemstack = this.getDataWatcher().f(10);
++
++        if (itemstack == null) {
++            // System.out.println("Item entity " + this.id + " has no item?!"); CraftBukkit - remove console spam
++            return new ItemStack(Block.STONE);
++        } else {
++            return itemstack;
++         }
++     }
++
++    public void setItemStack(ItemStack itemstack) {
++        this.getDataWatcher().watch(10, itemstack);
++        this.getDataWatcher().h(10);
++    }
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
+index 8209b4d..a2bdef1 100644
+--- a/src/main/java/net/minecraft/server/EntityLiving.java
++++ b/src/main/java/net/minecraft/server/EntityLiving.java
+@@ -1282,8 +1282,8 @@ public abstract class EntityLiving extends Entity {
+             while (iterator.hasNext()) {
+                 EntityItem entityitem = (EntityItem) iterator.next();
+ 
+-                if (!entityitem.dead && entityitem.itemStack != null) {
+-                    ItemStack itemstack = entityitem.itemStack;
++                if (!entityitem.dead && entityitem.getItemStack() != null) {
++                    ItemStack itemstack = entityitem.getItemStack();
+                     int i = b(itemstack);
+ 
+                     if (i > -1) {
+diff --git a/src/main/java/net/minecraft/server/EntityMinecart.java b/src/main/java/net/minecraft/server/EntityMinecart.java
+index 29edbc3..075fa1b 100644
+--- a/src/main/java/net/minecraft/server/EntityMinecart.java
++++ b/src/main/java/net/minecraft/server/EntityMinecart.java
+@@ -237,7 +237,7 @@ public class EntityMinecart extends Entity implements IInventory {
+                         EntityItem entityitem = new EntityItem(this.world, this.locX + (double) f, this.locY + (double) f1, this.locZ + (double) f2, new ItemStack(itemstack.id, j, itemstack.getData()));
+ 
+                         if (itemstack.hasTag()) {
+-                            entityitem.itemStack.setTag((NBTTagCompound) itemstack.getTag().clone());
++                            entityitem.getItemStack().setTag((NBTTagCompound) itemstack.getTag().clone());
+                         }
+ 
+                         float f3 = 0.05F;
 diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 index 5187674..f7e88a2 100644
 --- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
@@ -91,6 +393,32 @@ index 60a1997..0d59856 100644
  
                  for (Object object : list) {
                      if (s == null) {
+diff --git a/src/main/java/net/minecraft/server/NetServerHandler.java b/src/main/java/net/minecraft/server/NetServerHandler.java
+index f8537ee..8ffe16b 100644
+--- a/src/main/java/net/minecraft/server/NetServerHandler.java
++++ b/src/main/java/net/minecraft/server/NetServerHandler.java
+@@ -567,21 +567,6 @@ public class NetServerHandler extends NetHandler {
+                 if (worldserver.getTypeId(i, j, k) != 0) {
+                     this.player.netServerHandler.sendPacket(new Packet53BlockChange(i, j, k, worldserver));
+                 }
+-            } else if (packet14blockdig.e == 3) {
+-                // CraftBukkit start
+-                logger.warning(this.player.name + " is using a modded client!");
+-                this.disconnect("Nope!");
+-                return;
+-                /*
+-                double d4 = this.player.locX - ((double) i + 0.5D);
+-                double d5 = this.player.locY - ((double) j + 0.5D);
+-                double d6 = this.player.locZ - ((double) k + 0.5D);
+-                double d7 = d4 * d4 + d5 * d5 + d6 * d6;
+-
+-                if (d7 < 256.0D) {
+-                    this.player.netServerHandler.sendPacket(new Packet53BlockChange(i, j, k, worldserver));
+-                }
+-                // CraftBukkit end */
+             }
+         }
+     }
 diff --git a/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java b/src/main/java/net/minecraft/server/Packet23VehicleSpawn.java
 new file mode 100644
 index 0000000..61543f8
@@ -229,6 +557,24 @@ index 07681a8..fbf07d9 100644
          dataoutputstream.write(this.buffer, 0, this.size);
  
          for (int i = 0; i < this.c.length; ++i) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+index 6bdfe3e..02b32cf 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+@@ -22,11 +22,11 @@ public class CraftItem extends CraftEntity implements Item {
+     }
+ 
+     public ItemStack getItemStack() {
+-        return CraftItemStack.asCraftMirror(item.itemStack);
++        return CraftItemStack.asCraftMirror(item.getItemStack());
+     }
+ 
+     public void setItemStack(ItemStack stack) {
+-        item.itemStack = CraftItemStack.asNMSCopy(stack);
++        item.setItemStack(CraftItemStack.asNMSCopy(stack));
+     }
+ 
+     public int getPickupDelay() {
 -- 
-1.7.9.5
+1.7.4.4
 
