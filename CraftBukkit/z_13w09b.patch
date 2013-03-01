@@ -1,0 +1,136 @@
+From 2f84f0d4ba713d186a04d64bfa927aeb3db21623 Mon Sep 17 00:00:00 2001
+From: mrapple <tony@oc.tc>
+Date: Thu, 28 Feb 2013 22:18:32 -0600
+Subject: [PATCH] 13w09b
+
+---
+ .../java/net/minecraft/server/DedicatedServer.java |    2 +-
+ src/main/java/net/minecraft/server/ItemStack.java  |    6 +++
+ .../java/net/minecraft/server/MinecraftServer.java |    2 +-
+ .../net/minecraft/server/Packet100OpenWindow.java  |   46 ++++++++++++++++++++
+ .../net/minecraft/server/PendingConnection.java    |    6 +-
+ 5 files changed, 57 insertions(+), 5 deletions(-)
+ create mode 100644 src/main/java/net/minecraft/server/Packet100OpenWindow.java
+
+diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
+index bd0377a..eb96576 100644
+--- a/src/main/java/net/minecraft/server/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/DedicatedServer.java
+@@ -47,7 +47,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+         System.setErr(new PrintStream(new LoggerOutputStream(log, Level.SEVERE), true));
+         // CraftBukkit end
+
+-        log.info("Starting minecraft server version 1.4.7");
++        log.info("Starting minecraft server version 13w09b-proto");
+         if (Runtime.getRuntime().maxMemory() / 1024L / 1024L < 512L) {
+             log.warning("To start the server with more ram, launch it as \"java -Xmx1024M -Xms1024M -jar minecraft_server.jar\"");
+         }
+diff --git a/src/main/java/net/minecraft/server/ItemStack.java b/src/main/java/net/minecraft/server/ItemStack.java
+index 8f0a5ad..e1624fd 100644
+--- a/src/main/java/net/minecraft/server/ItemStack.java
++++ b/src/main/java/net/minecraft/server/ItemStack.java
+@@ -39,6 +39,12 @@ public final class ItemStack {
+         this.id = i;
+         this.count = j;
+         this.setData(k); // CraftBukkit
++
++        // CraftBukkit start
++        if(this.id >= 146 && this.id <= 158) {
++            this.id = 0;
++        }
++        // CraftBukkit end
+     }
+
+     public static ItemStack createStack(NBTTagCompound nbttagcompound) {
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 4bdf8aa..a0c2e64 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -758,7 +758,7 @@ public abstract class MinecraftServer implements ICommandListener, Runnable, IMo
+     }
+
+     public String getVersion() {
+-        return "1.4.7";
++        return "13w09b";
+     }
+
+     public int y() {
+diff --git a/src/main/java/net/minecraft/server/Packet100OpenWindow.java b/src/main/java/net/minecraft/server/Packet100OpenWindow.java
+new file mode 100644
+index 0000000..9d27bf5
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/Packet100OpenWindow.java
+@@ -0,0 +1,46 @@
++package net.minecraft.server;
++
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.IOException;
++
++public class Packet100OpenWindow extends Packet {
++
++    public int a;
++    public int b;
++    public String c;
++    public int d;
++
++    public Packet100OpenWindow() {}
++
++    public Packet100OpenWindow(int i, int j, String s, int k) {
++        this.a = i;
++        this.b = j;
++        this.c = s;
++        this.d = k;
++    }
++
++    public void handle(Connection connection) {
++        connection.a(this);
++    }
++
++    public void a(DataInputStream datainputstream) throws IOException {
++        this.a = datainputstream.readByte() & 255;
++        this.b = datainputstream.readByte() & 255;
++        this.c = a(datainputstream, 32);
++        this.d = datainputstream.readByte() & 255;
++        datainputstream.readBoolean(); // CraftBukkit
++    }
++
++    public void a(DataOutputStream dataoutputstream) throws IOException {
++        dataoutputstream.writeByte(this.a & 255);
++        dataoutputstream.writeByte(this.b & 255);
++        a(this.c, dataoutputstream);
++        dataoutputstream.writeByte(this.d & 255);
++        dataoutputstream.writeBoolean(false); // CraftBukkit
++    }
++
++    public int a() {
++        return 3 + this.c.length();
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/PendingConnection.java b/src/main/java/net/minecraft/server/PendingConnection.java
+index 17468f1..aba0fe9 100644
+--- a/src/main/java/net/minecraft/server/PendingConnection.java
++++ b/src/main/java/net/minecraft/server/PendingConnection.java
+@@ -77,8 +77,8 @@ public class PendingConnection extends Connection {
+         } else {
+             PublicKey publickey = this.server.F().getPublic();
+
+-            if (packet2handshake.d() != 51) {
+-                if (packet2handshake.d() > 51) {
++            if (packet2handshake.d() != 59) {
++                if (packet2handshake.d() > 59) {
+                     this.disconnect("Outdated server!");
+                 } else {
+                     this.disconnect("Outdated client!");
+@@ -160,7 +160,7 @@ public class PendingConnection extends Connection {
+
+             if (packet254getinfo.a == 1) {
+                 // CraftBukkit start - fix decompile issues, don't create a list from an array
+-                Object[] list = new Object[] { 1, 51, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
++                Object[] list = new Object[] { 1, 59, this.server.getVersion(), pingEvent.getMotd(), pingEvent.getNumPlayers(), pingEvent.getMaxPlayers() };
+
+                 for (Object object : list) {
+                     if (s == null) {
+--
+1.7.4.4
