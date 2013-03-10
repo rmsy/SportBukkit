@@ -7,48 +7,57 @@ In order to not spam the PlayerInteractEvent, we need to keep track of wether or
 
 This does modify PlayerInteractEvent firing, but it shouldn't be 'breaking'.
 ---
- .../net/minecraft/server/BlockPressurePlate.java   |   60 +++++++++++++-------
- 1 files changed, 40 insertions(+), 20 deletions(-)
+ .../minecraft/server/BlockBasePressurePlate.java   |   59 ++++++++++++++------
+ .../net/minecraft/server/BlockPressurePlate.java   |    5 +-
+ 2 files changed, 45 insertions(+), 19 deletions(-)
 
-diff --git a/src/main/java/net/minecraft/server/BlockPressurePlate.java b/src/main/java/net/minecraft/server/BlockPressurePlate.java
-index e4dc875..5f399f9 100644
---- a/src/main/java/net/minecraft/server/BlockPressurePlate.java
-+++ b/src/main/java/net/minecraft/server/BlockPressurePlate.java
-@@ -7,11 +7,14 @@ import java.util.Random;
+diff --git a/src/main/java/net/minecraft/server/BlockBasePressurePlate.java b/src/main/java/net/minecraft/server/BlockBasePressurePlate.java
+index d8f9c31..5a9c51f 100644
+--- a/src/main/java/net/minecraft/server/BlockBasePressurePlate.java
++++ b/src/main/java/net/minecraft/server/BlockBasePressurePlate.java
+@@ -3,6 +3,10 @@ package net.minecraft.server;
+ import java.util.Random;
+
  // CraftBukkit start
- import org.bukkit.event.block.BlockRedstoneEvent;
- import org.bukkit.event.entity.EntityInteractEvent;
 +import java.util.Map;
 +import java.util.HashMap;
- // CraftBukkit end
- 
- public class BlockPressurePlate extends Block {
- 
-     private EnumMobType a;
-+    private Map<Object, Boolean> entities = new HashMap<Object, Boolean>(); // CraftBukkit
- 
-     protected BlockPressurePlate(int i, int j, EnumMobType enummobtype, Material material) {
-         super(i, j, material);
-@@ -100,39 +103,56 @@ public class BlockPressurePlate extends Block {
-             while (iterator.hasNext()) {
-                 Entity entity = (Entity) iterator.next();
- 
--                if (!entity.au()) {
-+                Boolean result = this.entities.get(entity);
-+                if (!entity.au() && (result == null || result == true)) {
-                     flag1 = true;
-                     break;
-                 }
-             }
-         }
--
++import java.util.Iterator;
++
+ import java.util.List;
+ import org.bukkit.event.block.BlockRedstoneEvent;
+ import org.bukkit.event.entity.EntityInteractEvent;
+@@ -11,6 +14,7 @@ import org.bukkit.event.entity.EntityInteractEvent;
+ public abstract class BlockBasePressurePlate extends Block {
+
+     private String creativeTab;
++    public Map<Object, Boolean> entities = new HashMap<Object, Boolean>(); // CraftBukkit
+
+     protected BlockBasePressurePlate(int i, String s, Material material) {
+         super(i, material);
+@@ -96,32 +100,51 @@ public abstract class BlockBasePressurePlate extends Block {
+         int i1 = this.e(world, i, j, k);
+         boolean flag = l > 0;
+         boolean flag1 = i1 > 0;
++
          // CraftBukkit start - Interact Pressure Plate
          org.bukkit.World bworld = world.getWorld();
          org.bukkit.plugin.PluginManager manager = world.getServer().getPluginManager();
- 
++        List list = this.entitiesOnPlate(world, i, j, k);
++
++        if(!this.entities.isEmpty()) {
++            Iterator iterator = this.entities.keySet().iterator();
++
++            while(iterator.hasNext()) {
++                Entity entity = (Entity) iterator.next();
++                if(!list.contains(entity)) {
++                    iterator.remove();
++                }
++            }
++        }
+
 -        if (flag != flag1) {
 -            if (flag1) {
--                for (Object object : list) {
+-                for (Object object : this.entitiesOnPlate(world, i, j, k)) {
 -                    if (object != null) {
 -                        org.bukkit.event.Cancellable cancellable;
 -
@@ -64,17 +73,6 @@ index e4dc875..5f399f9 100644
 -                        if (cancellable.isCancelled()) {
 -                            return;
 -                        }
-+        if(!this.entities.isEmpty()) {
-+            Iterator iterator = this.entities.keySet().iterator();
-+
-+            while(iterator.hasNext()) {
-+                Entity entity = (Entity) iterator.next();
-+                if(!list.contains(entity)) {
-+                    iterator.remove();
-+                }
-+            }
-+        }
-+
 +        if (flag1) {
 +            Boolean result;
 +
@@ -95,17 +93,32 @@ index e4dc875..5f399f9 100644
 +
 +                    this.entities.put(object, !cancellable.isCancelled());
 +                    if(cancellable.isCancelled()) {
-+                        world.a(i, j, k, this.id, this.r_());
++                        world.a(i, j, k, this.id, this.a(world));
 +                        return;
                      }
                  }
              }
 +        }
- 
-+        if (flag != flag1) {
-             BlockRedstoneEvent eventRedstone = new BlockRedstoneEvent(bworld.getBlockAt(i, j, k), flag ? 1 : 0, flag1 ? 1 : 0);
-             manager.callEvent(eventRedstone);
- 
--- 
-1.7.4.4
 
++        if(flag != flag1) {
+             BlockRedstoneEvent eventRedstone = new BlockRedstoneEvent(bworld.getBlockAt(i, j, k), l, i1);
+             manager.callEvent(eventRedstone);
+
+diff --git a/src/main/java/net/minecraft/server/BlockPressurePlate.java b/src/main/java/net/minecraft/server/BlockPressurePlate.java
+index 4fd50df..64c4dbb 100644
+--- a/src/main/java/net/minecraft/server/BlockPressurePlate.java
++++ b/src/main/java/net/minecraft/server/BlockPressurePlate.java
+@@ -29,7 +29,10 @@ public class BlockPressurePlate extends BlockBasePressurePlate {
+             while (iterator.hasNext()) {
+                 Entity entity = (Entity) iterator.next();
+
+-                if (!entity.at()) {
++                // CraftBukkit start
++                Boolean result = this.entities.get(entity);
++                if (!entity.at() && (result == null || result == true)) {
++                    // CraftBukkit end
+                     return 15;
+                 }
+             }
+--
+1.7.4.

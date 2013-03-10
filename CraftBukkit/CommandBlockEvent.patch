@@ -5,11 +5,11 @@ Subject: [PATCH] Fire ServerCommandEvent for command block cmds. Addresses
  BUKKIT-3165
 
 ---
- src/main/java/net/minecraft/server/TileEntityCommand.java | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ .../net/minecraft/server/TileEntityCommand.java    |    8 ++++++--
+ 1 files changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/TileEntityCommand.java b/src/main/java/net/minecraft/server/TileEntityCommand.java
-index 357c583..eedc513 100644
+index 623f87c..941e83a 100644
 --- a/src/main/java/net/minecraft/server/TileEntityCommand.java
 +++ b/src/main/java/net/minecraft/server/TileEntityCommand.java
 @@ -3,6 +3,7 @@ package net.minecraft.server;
@@ -19,19 +19,22 @@ index 357c583..eedc513 100644
 +import org.bukkit.event.server.ServerCommandEvent;
  import com.google.common.base.Joiner;
  // CraftBukkit end
- 
-@@ -70,7 +71,10 @@ public class TileEntityCommand extends TileEntity implements ICommandListener {
- 
-                 // now dispatch all of the commands we ended up with
-                 for (int i = 0; i < commands.size(); i++) {
--                    commandMap.dispatch(sender, joiner.join(Arrays.asList(commands.get(i))));
-+                    String cmd = joiner.join(Arrays.asList(commands.get(i)));
-+                    ServerCommandEvent event = new ServerCommandEvent(sender, cmd);
-+                    world.getServer().getPluginManager().callEvent(event);
-+                    commandMap.dispatch(sender, event.getCommand());
+
+@@ -49,9 +50,12 @@ public class TileEntityCommand extends TileEntity implements ICommandListener {
+                 if (this.world.players.isEmpty()) {
+                     return 0;
                  }
-                 // CraftBukkit end
+-                // CraftBukkit end
+
+-                return icommandhandler.a(this, this.b);
++                ServerCommandEvent event = new ServerCommandEvent(this.sender, command);
++                world.getServer().getPluginManager().callEvent(event);
++
++                return icommandhandler.a(this, event.getCommand());
++                // CraftBukkit end
+             } else {
+                 return 0;
              }
--- 
-1.7.12.2
+--
+1.7.4.4
 
